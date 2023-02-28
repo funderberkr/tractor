@@ -1,119 +1,120 @@
-/**
- * SPDX-License-Identifier: MIT
- **/
+// SPDX-License-Identifier: MIT
 
-pragma solidity =0.7.6;
+pragma solidity ^0.8.0;
 
-/**
- * @title Lib Tractor
- * @author 0xm00neth
- **/
-library LibTractor {
-    bytes32 constant TRACTOR_STORAGE_POSITION =
-        keccak256("diamond.storage.tractor");
+import {ECDSA, EIP712} from "./node_modules/@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-    struct TractorStorage {
-        mapping(bytes32 => uint256) blueprintNonce;
-        address activePublisher;
-    }
+/// @title Tractor
+/// @notice Holds nonce and helpers for Blueprints
+abstract contract Tractor is EIP712 {
+    /* Structs */
 
-    // Blueprint stores blueprint related values
+    // Blueprint stores blueprint related values.
     struct Blueprint {
         address publisher;
         bytes data;
-        bytes32[] calldataCopyParams;
         uint256 maxNonce;
         uint256 startTime;
         uint256 endTime;
+    }
+
+    // SignedBlueprint stores blueprint, hash, and signature, which enables verification.
+    struct SignedBlueprint {
+        Blueprint blueprint;
+        bytes32 blueprintHash;
         bytes signature;
     }
 
-    /// @notice get tractor storage from storage
-    /// @return ts TractorStorage
-    function tractorStorage()
-        internal
-        pure
-        returns (TractorStorage storage ts)
+    //Blueprint type enum that defines how to handle data payload.
+    enum BlueprintDataType {DEFAULT} // Implementation Specific
+
+    // Mapping of signature to nonce.
+    mapping(bytes32 => uint256) private nonces;
+
+    // Name of application using Tractor.
+    string constant IMPLEMENTATION_NAME = ""; // Implementation Specific
+    // Version of application using Tractor.
+    string constant IMPLEMENTATION_VERSION = ""; // Implementation Specific
+
+    /* Events */
+
+    /// @notice New blueprint published
+    /// @param blueprint Blueprint object
+    event PublishedBlueprint(Blueprint blueprint);
+
+    /// @notice Blueprint destroyed
+    /// @param blueprintHash Blueprint Hash
+    event DestroyedBlueprint(bytes32 blueprintHash);
+
+    /// @notice Action has been taken based on blueprint data
+    /// @param operator The operator address
+    /// @param blueprintHash Blueprint Hash
+    event executedBlueprint(address indexed operator, bytes32 blueprintHash);
+
+    /* Modifiers */
+
+    /// @notice Verifies that the listed publisher generated the signature for this exact structure.
+    /// @param signedBlueprint Blueprint object
+    modifier verifySignature(SignedBlueprint calldata signedBlueprint) {
+        require(getBlueprintHash(signedBlueprint.blueprint) == signedBlueprint.blueprintHash, "Tractor: invalid hash");
+        address signer = ECDSA.recover(signedBlueprint.blueprintHash, signedBlueprint.signature);
+        require(signer == signedBlueprint.blueprint.publisher, "Tractor: invalid signature");
+        _;
+    }
+
+    constructor() EIP712(IMPLEMENTATION_NAME, IMPLEMENTATION_VERSION) {}
+
+    /* Functions */
+
+    /// @notice Publish new blueprint
+    /// @param signedBlueprint Blueprint object
+    function publishBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
+        emit PublishedBlueprint(signedBlueprint.blueprint);
+    }
+
+    /// @notice Destroy existing blueprint
+    /// @param signedBlueprint Blueprint object
+    function destroyBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
+        nonces[signedBlueprint.blueprintHash] = type(uint256).max;
+        emit DestroyedBlueprint(signedBlueprint.blueprintHash);
+    }
+
+    /// @notice Perform operation based on blueprint
+    /// @param signedBlueprint Blueprint object
+    /// @param callData callData inputed by tractor operator
+    /// @return results arbitrary data returned from execution
+    function executeBlueprint(SignedBlueprint calldata signedBlueprint, bytes calldata callData)
+        external
+        payable
+        verifySignature(signedBlueprint)
+        returns (bytes[] memory results)
     {
-        bytes32 position = TRACTOR_STORAGE_POSITION;
-        assembly {
-            ts.slot := position
-        }
-    }
-
-    /// @notice increment the blueprint nonce by 1
-    /// @param blueprintHash blueprint hash
-    function incrementBlueprintNonce(bytes32 blueprintHash) internal {
-        TractorStorage storage ts = tractorStorage();
-        ++ts.blueprintNonce[blueprintHash];
-    }
-
-    /// @notice cancel blueprint
-    /// @dev set blueprintNonce to type(uint256).max
-    /// @param blueprintHash blueprint hash
-    function cancelBlueprint(bytes32 blueprintHash) internal {
-        tractorStorage().blueprintNonce[blueprintHash] = type(uint256).max;
-    }
-
-    /// @notice set blueprint publisher address
-    /// @param publisher blueprint publisher address
-    function setPublisher(address publisher) internal {
         require(
-            tractorStorage().activePublisher == address(0) ||
-                tractorStorage().activePublisher == address(1),
-            "LibTractor: publisher already set"
+            signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
+            "Tractor: blueprint is not active"
         );
-        tractorStorage().activePublisher = publisher;
-    }
+        require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
+        nonces[signedBlueprint.blueprintHash]++;
 
-    /// @notice reset blueprint publisher address
-    function resetPublisher() internal {
-        tractorStorage().activePublisher = address(1);
-    }
+        results = _executeBlueprint(signedBlueprint.blueprint.data[0], signedBlueprint.blueprint.data[1:], callData);
 
-    /// @notice return current activePublisher address
-    /// @return publisher current activePublisher address
-    function getBlueprintPublisher() internal view returns (address) {
-        return tractorStorage().activePublisher;
-    }
-
-    /// @notice return current activePublisher address
-    /// @dev reverts if activePublisher is 0x0
-    /// @return publisher current activePublisher address
-    function getActivePublisher() internal view returns (address publisher) {
-        publisher = getBlueprintPublisher();
-        require(publisher != address(1), "Tractor: No active publisher");
+        emit executedBlueprint(msg.sender, signedBlueprint.blueprintHash);
     }
 
     /// @notice calculates blueprint hash
-    /// @param blueprint blueprint object
-    /// @return hash calculated Blueprint hash
-    function getBlueprintHash(Blueprint calldata blueprint)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return
-            keccak256(
-                abi.encodePacked(
-                    blueprint.publisher,
-                    blueprint.data,
-                    blueprint.calldataCopyParams,
-                    blueprint.maxNonce,
-                    blueprint.startTime,
-                    blueprint.endTime
-                )
-            );
+    /// @param blueprint Blueprint object
+    /// @return bytes32 calculated blueprint hash
+    function getBlueprintHash(Blueprint calldata blueprint) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
     }
 
-    /// @notice get blueprint nonce
-    /// @param blueprintHash blueprint hash
-    /// @return nonce current blueprint nonce
-    function getBlueprintNonce(bytes32 blueprintHash)
+    /// @notice Decode and execute logic based on the Blueprint data
+    /// @dev Should verify sender has authority to execute. Assumes metadata requirements are met
+    /// @param dataType uint8 corresponding to a type in BlueprintDataType
+    /// @param data blueprint data following type byte. used to execute desired implementation-specific functionality
+    /// @param callData operator specified data. used to execute desired implementation-specific functionality
+    function _executeBlueprint(bytes1 dataType, bytes calldata data, bytes calldata callData)
         internal
-        view
-        returns (uint256)
-    {
-        return tractorStorage().blueprintNonce[blueprintHash];
-    }
+        virtual
+        returns (bytes[] memory results); // Implementation Specific
 }
