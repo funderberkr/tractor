@@ -26,7 +26,7 @@ abstract contract Tractor is EIP712 {
     }
 
     //Blueprint type enum that defines how to handle data payload.
-    enum BlueprintDataType {DEFAULT} // Implementation Specific
+    // enum BlueprintDataType {} // Implementation Specific
 
     // Mapping of signature to nonce.
     mapping(bytes32 => uint256) private nonces;
@@ -74,6 +74,7 @@ abstract contract Tractor is EIP712 {
     /// @notice Destroy existing blueprint
     /// @param signedBlueprint Blueprint object
     function destroyBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
+        require(msg.sender == signedBlueprint.blueprint.publisher, "Tractor: only publisher can destroy");
         nonces[signedBlueprint.blueprintHash] = type(uint256).max;
         emit DestroyedBlueprint(signedBlueprint.blueprintHash);
     }
