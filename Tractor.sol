@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 import {ECDSA, EIP712} from "./node_modules/@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title Tractor
-/// @notice Holds nonce and helpers for Blueprints
+/// @notice Holds nonce and helpers for creating, validating, and destroying Blueprints
 abstract contract Tractor is EIP712 {
     /* Structs */
 
@@ -44,7 +44,7 @@ abstract contract Tractor is EIP712 {
     /// @notice Action has been taken based on blueprint data
     /// @param operator The operator address
     /// @param blueprintHash Blueprint Hash
-    event executedBlueprint(address indexed operator, bytes32 blueprintHash);
+    event UsedBlueprint(address indexed operator, bytes32 blueprintHash);
 
     /* Modifiers */
 
@@ -57,13 +57,31 @@ abstract contract Tractor is EIP712 {
         _;
     }
 
+    /// @notice Perform operation based on blueprint
+    /// @param signedBlueprint Blueprint object
+    modifier checkMetadata(SignedBlueprint calldata signedBlueprint) {
+        require(
+            signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
+            "Tractor: blueprint is not active"
+        );
+        require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
+        _;
+    }
+
+    /// @notice Perform operation based on blueprint
+    /// @param signedBlueprint Blueprint object
+    modifier publisherOnly(SignedBlueprint calldata signedBlueprint) {
+        require(msg.sender == signedBlueprint.blueprint.publisher, "Tractor: invalid sender");
+        _;
+    }
+
+    /* Functions */
+
     /// @notice constructor
     /// @dev see https://docs.openzeppelin.com/contracts/4.x/api/utils#EIP712-constructor-string-string-
     /// @param implName Name of the application using Tractor
     /// @param implVersion Version of the application using Tractor
     constructor(string memory implName, string memory implVersion) EIP712(implName, implVersion) {}
-
-    /* Functions */
 
     /// @notice Publish new blueprint
     /// @param signedBlueprint Blueprint object
@@ -73,32 +91,37 @@ abstract contract Tractor is EIP712 {
 
     /// @notice Destroy existing blueprint
     /// @param signedBlueprint Blueprint object
-    function destroyBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
-        require(msg.sender == signedBlueprint.blueprint.publisher, "Tractor: only publisher can destroy");
+    function destroyBlueprint(SignedBlueprint calldata signedBlueprint)
+        external
+        verifySignature(signedBlueprint)
+        publisherOnly(signedBlueprint)
+    {
         nonces[signedBlueprint.blueprintHash] = type(uint256).max;
         emit DestroyedBlueprint(signedBlueprint.blueprintHash);
     }
 
-    /// @notice Perform operation based on blueprint
+    /// @notice Increment nonce of blueprint hash
     /// @param signedBlueprint Blueprint object
-    /// @param callData callData set by tractor operator
-    /// @return results arbitrary data returned from execution
-    function executeBlueprint(SignedBlueprint calldata signedBlueprint, bytes calldata callData)
+    function incrementNonce(SignedBlueprint calldata signedBlueprint)
         external
-        payable
         verifySignature(signedBlueprint)
-        returns (bytes[] memory results)
+        checkMetadata(signedBlueprint)
     {
-        require(
-            signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
-            "Tractor: blueprint is not active"
-        );
-        require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
         nonces[signedBlueprint.blueprintHash]++;
+        emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
+    }
 
-        results = _executeBlueprint(signedBlueprint.blueprint.data[0], signedBlueprint.blueprint.data[1:], callData);
+    /// @notice Encode Blueprint data field with type and data
+    /// @param dataType bytes1 representing enum value of data type
+    /// @param data encoded data of arbitrary structure
+    function encodeDataField(bytes1 dataType, bytes calldata data) public pure returns (bytes memory) {
+        return abi.encode(bytes1(dataType), data);
+    }
 
-        emit executedBlueprint(msg.sender, signedBlueprint.blueprintHash);
+    /// @notice Decode blueprint data field into type and data
+    /// @param data full data bytes from Blueprint object
+    function decodeDataField(bytes calldata data) public pure returns (bytes1, bytes calldata) {
+        return (data[1], data[1:]);
     }
 
     /// @notice calculates blueprint hash
@@ -107,14 +130,4 @@ abstract contract Tractor is EIP712 {
     function getBlueprintHash(Blueprint calldata blueprint) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
     }
-
-    /// @notice Decode and execute logic based on the Blueprint data
-    /// @dev Should verify sender has authority to execute. Assumes metadata requirements are met
-    /// @param dataType uint8 corresponding to a type in BlueprintDataType
-    /// @param data blueprint data following type byte. used to execute desired implementation-specific functionality
-    /// @param callData operator specified data. used to execute desired implementation-specific functionality
-    function _executeBlueprint(bytes1 dataType, bytes calldata data, bytes calldata callData)
-        internal
-        virtual
-        returns (bytes[] memory results); // Implementation Specific
 }
