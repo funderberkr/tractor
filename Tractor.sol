@@ -57,15 +57,17 @@ abstract contract Tractor is EIP712 {
         _;
     }
 
-    /// @notice Perform operation based on blueprint
+    /// @notice Check that use of the Blueprint is valid, based on metadata. Increment nonce after use.
     /// @param signedBlueprint Blueprint object
-    modifier checkMetadata(SignedBlueprint calldata signedBlueprint) {
+    modifier checkMetadataIncrementNonce(SignedBlueprint calldata signedBlueprint) {
         require(
             signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
             "Tractor: blueprint is not active"
         );
         require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
         _;
+        nonces[signedBlueprint.blueprintHash]++;
+        emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
     }
 
     /// @notice Perform operation based on blueprint
@@ -98,17 +100,6 @@ abstract contract Tractor is EIP712 {
     {
         nonces[signedBlueprint.blueprintHash] = type(uint256).max;
         emit DestroyedBlueprint(signedBlueprint.blueprintHash);
-    }
-
-    /// @notice Increment nonce of blueprint hash
-    /// @param signedBlueprint Blueprint object
-    function incrementNonce(SignedBlueprint calldata signedBlueprint)
-        external
-        verifySignature(signedBlueprint)
-        checkMetadata(signedBlueprint)
-    {
-        nonces[signedBlueprint.blueprintHash]++;
-        emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
     }
 
     /// @notice Encode Blueprint data field with type and data
