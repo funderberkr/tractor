@@ -31,11 +31,6 @@ abstract contract Tractor is EIP712 {
     // Mapping of signature to nonce.
     mapping(bytes32 => uint256) private nonces;
 
-    // Name of application using Tractor.
-    string constant IMPLEMENTATION_NAME = ""; // Implementation Specific
-    // Version of application using Tractor.
-    string constant IMPLEMENTATION_VERSION = ""; // Implementation Specific
-
     /* Events */
 
     /// @notice New blueprint published
@@ -62,7 +57,11 @@ abstract contract Tractor is EIP712 {
         _;
     }
 
-    constructor() EIP712(IMPLEMENTATION_NAME, IMPLEMENTATION_VERSION) {}
+    /// @notice constructor
+    /// @dev see https://docs.openzeppelin.com/contracts/4.x/api/utils#EIP712-constructor-string-string-
+    /// @param implName Name of the application using Tractor
+    /// @param implVersion Version of the application using Tractor
+    constructor(string memory implName, string memory implVersion) EIP712(implName, implVersion) {}
 
     /* Functions */
 
@@ -81,7 +80,7 @@ abstract contract Tractor is EIP712 {
 
     /// @notice Perform operation based on blueprint
     /// @param signedBlueprint Blueprint object
-    /// @param callData callData inputed by tractor operator
+    /// @param callData callData set by tractor operator
     /// @return results arbitrary data returned from execution
     function executeBlueprint(SignedBlueprint calldata signedBlueprint, bytes calldata callData)
         external
