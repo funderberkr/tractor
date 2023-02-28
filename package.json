@@ -1,0 +1,20 @@
+{
+  "name": "tractor",
+  "version": "1.0.0",
+  "description": "Tractor is a system for generalized signing and verification on the EVM. This repo takes the code out of Beanstalk and reframes it to be more easily usable by independent protocols.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Modulend/Tractor.git"
+  },
+  "keywords": [],
+  "author": "funderberker",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Modulend/Tractor/issues"
+  },
+  "homepage": "https://github.com/Modulend/Tractor#readme"
+}
