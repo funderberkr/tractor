@@ -57,14 +57,19 @@ abstract contract Tractor is EIP712 {
         _;
     }
 
+    /// @notice Check that use of the Blueprint is valid, based on metadata.
+    /// @dev Only use when not tracking uses via nonce system, otherwise use verifyUseIncrementBlueprint.
+    /// @param signedBlueprint Blueprint object
+    modifier verifyUseBlueprint(SignedBlueprint calldata signedBlueprint) {
+        _verifyMetadata(signedBlueprint);
+        _;
+        emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
+    }
+
     /// @notice Check that use of the Blueprint is valid, based on metadata. Increment nonce after use.
     /// @param signedBlueprint Blueprint object
-    modifier checkMetadataIncrementNonce(SignedBlueprint calldata signedBlueprint) {
-        require(
-            signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
-            "Tractor: blueprint is not active"
-        );
-        require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
+    modifier verifyUseIncrementBlueprint(SignedBlueprint calldata signedBlueprint) {
+        _verifyMetadata(signedBlueprint);
         _;
         nonces[signedBlueprint.blueprintHash]++;
         emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
@@ -120,5 +125,13 @@ abstract contract Tractor is EIP712 {
     /// @return bytes32 calculated blueprint hash
     function getBlueprintHash(Blueprint calldata blueprint) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
+    }
+
+    function _verifyMetadata(SignedBlueprint calldata signedBlueprint) private view {
+        require(
+            signedBlueprint.blueprint.startTime < block.timestamp && block.timestamp < signedBlueprint.blueprint.endTime,
+            "Tractor: blueprint is not active"
+        );
+        require(nonces[signedBlueprint.blueprintHash] < signedBlueprint.blueprint.maxNonce, "Tractor: maxNonce reached");
     }
 }
