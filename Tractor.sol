@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import {ECDSA, EIP712} from "./node_modules/@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA, EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title Tractor
 /// @notice Holds nonce and helpers for creating, validating, and destroying Blueprints
