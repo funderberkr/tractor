@@ -2,40 +2,42 @@
 
 pragma solidity ^0.8.0;
 
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA, EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+
+// Blueprint stores blueprint related values.
+struct Blueprint {
+    address publisher;
+    bytes data;
+    uint256 maxNonce;
+    uint256 startTime;
+    uint256 endTime;
+}
+
+// SignedBlueprint stores blueprint, hash, and signature, which enables verification.
+struct SignedBlueprint {
+    Blueprint blueprint;
+    bytes32 blueprintHash;
+    bytes signature;
+}
 
 /// @title Tractor
 /// @notice Holds nonce and helpers for creating, validating, and destroying Blueprints
-abstract contract Tractor is EIP712 {
-    /* Structs */
-
-    // Blueprint stores blueprint related values.
-    struct Blueprint {
-        address publisher;
-        bytes data;
-        uint256 maxNonce;
-        uint256 startTime;
-        uint256 endTime;
-    }
-
-    // SignedBlueprint stores blueprint, hash, and signature, which enables verification.
-    struct SignedBlueprint {
-        Blueprint blueprint;
-        bytes32 blueprintHash;
-        bytes signature;
-    }
-
-    //Blueprint type enum that defines how to handle data payload.
+abstract contract Tractor is EIP712, IERC1271 {
+    // Blueprint type enum that defines how to handle data payload.
     // enum BlueprintDataType {} // Implementation Specific
 
+    // Record of hashes this contract has signed.
+    mapping(bytes32 => bool) private signedHashes;
     // Mapping of signature to nonce.
     mapping(bytes32 => uint256) private nonces;
 
     /* Events */
 
     /// @notice New blueprint published
-    /// @param blueprint Blueprint object
-    event PublishedBlueprint(Blueprint blueprint);
+    /// @param signedBlueprint SignedBlueprint object
+    event PublishedBlueprint(SignedBlueprint signedBlueprint);
 
     /// @notice Blueprint destroyed
     /// @param blueprintHash Blueprint Hash
@@ -52,15 +54,20 @@ abstract contract Tractor is EIP712 {
     /// @param signedBlueprint Blueprint object
     modifier verifySignature(SignedBlueprint calldata signedBlueprint) {
         require(getBlueprintHash(signedBlueprint.blueprint) == signedBlueprint.blueprintHash, "Tractor: invalid hash");
-        address signer = ECDSA.recover(signedBlueprint.blueprintHash, signedBlueprint.signature);
-        require(signer == signedBlueprint.blueprint.publisher, "Tractor: invalid signature");
+        // NOTE this function is slightly less gas efficient for certain cases. Additionally, it could be optimized
+        //      if we expect that many signatures will have been signed by this contract itself.
+        require(
+            SignatureChecker.isValidSignatureNow(
+                signedBlueprint.blueprint.publisher, signedBlueprint.blueprintHash, signedBlueprint.signature
+            )
+        );
         _;
     }
 
     /// @notice Check that use of the Blueprint is valid, based on metadata.
     /// @dev Only use when not tracking uses via nonce system, otherwise use verifyUseIncrementBlueprint.
     /// @param signedBlueprint Blueprint object
-    modifier verifyUseBlueprint(SignedBlueprint calldata signedBlueprint) {
+    modifier canUseBlueprint(SignedBlueprint calldata signedBlueprint) {
         _verifyMetadata(signedBlueprint);
         _;
         emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
@@ -68,7 +75,7 @@ abstract contract Tractor is EIP712 {
 
     /// @notice Check that use of the Blueprint is valid, based on metadata. Increment nonce after use.
     /// @param signedBlueprint Blueprint object
-    modifier verifyUseIncrementBlueprint(SignedBlueprint calldata signedBlueprint) {
+    modifier canUseBlueprintIncrement(SignedBlueprint calldata signedBlueprint) {
         _verifyMetadata(signedBlueprint);
         _;
         nonces[signedBlueprint.blueprintHash]++;
@@ -93,7 +100,7 @@ abstract contract Tractor is EIP712 {
     /// @notice Publish new blueprint
     /// @param signedBlueprint Blueprint object
     function publishBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
-        emit PublishedBlueprint(signedBlueprint.blueprint);
+        emit PublishedBlueprint(signedBlueprint);
     }
 
     /// @notice Destroy existing blueprint
@@ -125,6 +132,21 @@ abstract contract Tractor is EIP712 {
     /// @return bytes32 calculated blueprint hash
     function getBlueprintHash(Blueprint calldata blueprint) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
+    }
+
+    /// @notice signs the blueprint by storing hash in map of known hashes.
+    /// @dev assumes valid blueprint hash.
+    function signBlueprint(bytes32 blueprintHash) internal {
+        // NOTE: benefits of using merkle tree here?
+        signedHashes[blueprintHash] = true;
+    }
+
+    // TODO: need a sanity check on this 1271 implementation.
+    function isValidSignature(bytes32 blueprintHash, bytes memory) external view returns (bytes4 magicValue) {
+        if (signedHashes[blueprintHash]) {
+            return 0x1626ba7e;
+        }
+        return 0xffffffff;
     }
 
     function _verifyMetadata(SignedBlueprint calldata signedBlueprint) private view {
