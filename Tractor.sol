@@ -6,6 +6,11 @@ import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {ECDSA, EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
+// NOTE can use uint8 instead of bytes1 for type via enum?
+
+// NOTE eoa use will use calldata args but internal calls will use memory args. duplicate all functions with external
+//      and internal modifiers? solidity forces such bad coding practices...
+
 // Blueprint stores blueprint related values.
 struct Blueprint {
     address publisher;
@@ -50,9 +55,10 @@ abstract contract Tractor is EIP712, IERC1271 {
 
     /* Modifiers */
 
+    // NOTE Should this function be defined twice - once with calldata and once with memory args?
     /// @notice Verifies that the listed publisher generated the signature for this exact structure.
     /// @param signedBlueprint Blueprint object
-    modifier verifySignature(SignedBlueprint calldata signedBlueprint) {
+    modifier verifySignature(SignedBlueprint memory signedBlueprint) {
         require(getBlueprintHash(signedBlueprint.blueprint) == signedBlueprint.blueprintHash, "Tractor: invalid hash");
         // NOTE this function is slightly less gas efficient for certain cases. Additionally, it could be optimized
         //      if we expect that many signatures will have been signed by this contract itself.
@@ -67,7 +73,7 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @notice Check that use of the Blueprint is valid, based on metadata.
     /// @dev Only use when not tracking uses via nonce system, otherwise use verifyUseIncrementBlueprint.
     /// @param signedBlueprint Blueprint object
-    modifier canUseBlueprint(SignedBlueprint calldata signedBlueprint) {
+    modifier useBlueprint(SignedBlueprint calldata signedBlueprint) {
         _verifyMetadata(signedBlueprint);
         _;
         emit UsedBlueprint(msg.sender, signedBlueprint.blueprintHash);
@@ -75,7 +81,7 @@ abstract contract Tractor is EIP712, IERC1271 {
 
     /// @notice Check that use of the Blueprint is valid, based on metadata. Increment nonce after use.
     /// @param signedBlueprint Blueprint object
-    modifier canUseBlueprintIncrement(SignedBlueprint calldata signedBlueprint) {
+    modifier useBlueprintIncrement(SignedBlueprint calldata signedBlueprint) {
         _verifyMetadata(signedBlueprint);
         _;
         nonces[signedBlueprint.blueprintHash]++;
@@ -97,9 +103,10 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @param implVersion Version of the application using Tractor
     constructor(string memory implName, string memory implVersion) EIP712(implName, implVersion) {}
 
+    // NOTE Should this function be defined twice - once with calldata and once with memory args?
     /// @notice Publish new blueprint
     /// @param signedBlueprint Blueprint object
-    function publishBlueprint(SignedBlueprint calldata signedBlueprint) external verifySignature(signedBlueprint) {
+    function publishBlueprint(SignedBlueprint memory signedBlueprint) public verifySignature(signedBlueprint) {
         emit PublishedBlueprint(signedBlueprint);
     }
 
@@ -117,7 +124,7 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @notice Encode Blueprint data field with type and data
     /// @param dataType bytes1 representing enum value of data type
     /// @param data encoded data of arbitrary structure
-    function encodeDataField(bytes1 dataType, bytes calldata data) public pure returns (bytes memory) {
+    function encodeDataField(bytes1 dataType, bytes memory data) public pure returns (bytes memory) {
         return abi.encode(bytes1(dataType), data);
     }
 
@@ -127,10 +134,11 @@ abstract contract Tractor is EIP712, IERC1271 {
         return (data[1], data[1:]);
     }
 
+    // NOTE Should this function be defined twice - once with calldata and once with memory args?
     /// @notice calculates blueprint hash
     /// @param blueprint Blueprint object
     /// @return bytes32 calculated blueprint hash
-    function getBlueprintHash(Blueprint calldata blueprint) public view returns (bytes32) {
+    function getBlueprintHash(Blueprint memory blueprint) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
     }
 
