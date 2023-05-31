@@ -124,13 +124,13 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @notice Encode Blueprint data field with type and data
     /// @param dataType bytes1 representing enum value of data type
     /// @param data encoded data of arbitrary structure
-    function encodeDataField(bytes1 dataType, bytes memory data) public pure returns (bytes memory) {
+    function packDataField(bytes1 dataType, bytes memory data) public pure returns (bytes memory) {
         return abi.encode(bytes1(dataType), data);
     }
 
     /// @notice Decode blueprint data field into type and data
     /// @param data full data bytes from Blueprint object
-    function decodeDataField(bytes calldata data) public pure returns (bytes1, bytes calldata) {
+    function unpackDataField(bytes calldata data) public pure returns (bytes1, bytes calldata) {
         return (data[1], data[1:]);
     }
 
