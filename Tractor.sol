@@ -125,13 +125,13 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @param dataType bytes1 representing enum value of data type
     /// @param data encoded data of arbitrary structure
     function packDataField(bytes1 dataType, bytes memory data) public pure returns (bytes memory) {
-        return abi.encode(bytes1(dataType), data);
+        return abi.encodePacked(bytes1(dataType), data);
     }
 
     /// @notice Decode blueprint data field into type and data
     /// @param data full data bytes from Blueprint object
     function unpackDataField(bytes calldata data) public pure returns (bytes1, bytes calldata) {
-        return (data[1], data[1:]);
+        return (data[0], data[1:]);
     }
 
     // NOTE Should this function be defined twice - once with calldata and once with memory args?
