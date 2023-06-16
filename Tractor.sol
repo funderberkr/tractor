@@ -65,7 +65,8 @@ abstract contract Tractor is EIP712, IERC1271 {
         require(
             SignatureChecker.isValidSignatureNow(
                 signedBlueprint.blueprint.publisher, signedBlueprint.blueprintHash, signedBlueprint.signature
-            )
+            ),
+            "Tractor: invalid signature"
         );
         _;
     }
