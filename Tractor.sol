@@ -3,8 +3,8 @@
 pragma solidity ^0.8.0;
 
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
-import {ECDSA, EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {EIP712External} from "./EIP712External.sol";
 
 // NOTE can use uint8 instead of bytes1 for type via enum?
 
@@ -29,7 +29,7 @@ struct SignedBlueprint {
 
 /// @title Tractor
 /// @notice Holds nonce and helpers for creating, validating, and destroying Blueprints
-abstract contract Tractor is EIP712, IERC1271 {
+abstract contract Tractor is EIP712External, IERC1271 {
     // Blueprint type enum that defines how to handle data payload.
     // enum BlueprintDataType {} // Implementation Specific
 
@@ -37,6 +37,10 @@ abstract contract Tractor is EIP712, IERC1271 {
     mapping(bytes32 => bool) private signedHashes;
     // Mapping of signature to nonce.
     mapping(bytes32 => uint256) private nonces;
+
+    // Blueprint(address publisher,bytes data,uint256 maxNonce,uint256 startTime,uint256 endTime)
+    bytes32 public constant BLUEPRINT_TYPEHASH =
+        keccak256("Blueprint(address publisher,bytes data,uint256 maxNonce,uint256 startTime,uint256 endTime)");
 
     /* Events */
 
@@ -140,7 +144,7 @@ abstract contract Tractor is EIP712, IERC1271 {
     /// @param blueprint Blueprint object
     /// @return bytes32 calculated blueprint hash
     function getBlueprintHash(Blueprint memory blueprint) public view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(blueprint)));
+        return _hashTypedDataV4(keccak256(abi.encode(BLUEPRINT_TYPEHASH, blueprint)));
     }
 
     /// @notice signs the blueprint by storing hash in map of known hashes.
