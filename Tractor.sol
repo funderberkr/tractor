@@ -140,11 +140,22 @@ abstract contract Tractor is EIP712External, IERC1271 {
     }
 
     // NOTE Should this function be defined twice - once with calldata and once with memory args?
-    /// @notice calculates blueprint hash
+    /// @notice returns EIP-712 compatible blueprint hash.
     /// @param blueprint Blueprint object
     /// @return bytes32 calculated blueprint hash
     function getBlueprintHash(Blueprint memory blueprint) public view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(BLUEPRINT_TYPEHASH, blueprint)));
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    BLUEPRINT_TYPEHASH,
+                    blueprint.publisher,
+                    keccak256(blueprint.data),
+                    blueprint.maxNonce,
+                    blueprint.startTime,
+                    blueprint.endTime
+                )
+            )
+        );
     }
 
     /// @notice signs the blueprint by storing hash in map of known hashes.
