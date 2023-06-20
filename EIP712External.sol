@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import {EIP712External} from "@openzeppelin/contracts/utils/cryptography/EIP712External.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 contract EIP712External is EIP712 {
@@ -20,4 +20,3 @@ contract EIP712External is EIP712 {
         return block.chainid;
     }
 }
-c

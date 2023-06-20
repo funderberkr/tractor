@@ -106,7 +106,7 @@ abstract contract Tractor is EIP712External, IERC1271 {
     /// @dev see https://docs.openzeppelin.com/contracts/4.x/api/utils#EIP712-constructor-string-string-
     /// @param implName Name of the application using Tractor
     /// @param implVersion Version of the application using Tractor
-    constructor(string memory implName, string memory implVersion) EIP712(implName, implVersion) {}
+    constructor(string memory implName, string memory implVersion) EIP712External(implName, implVersion) {}
 
     // NOTE Should this function be defined twice - once with calldata and once with memory args?
     /// @notice Publish new blueprint
