@@ -21,6 +21,10 @@ struct Blueprint {
 }
 
 // SignedBlueprint stores blueprint, hash, and signature, which enables verification.
+// Signature malleability of secp256k1 means that multiple signatures are valid for a given publisher+blueprint. The
+// additional signatures can be calculated by third parties, given a single known valid signature. Thus, the signature
+// in a SignedBlueprint should not be assumed to be strictly tied to the blueprint. Namely, do not use the signature as
+// a key and do not assume posession of a novel valid signature proves the possessor is the publisher.
 struct SignedBlueprint {
     Blueprint blueprint;
     bytes32 blueprintHash;
