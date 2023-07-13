@@ -169,7 +169,7 @@ abstract contract Tractor is EIP712External, IERC1271 {
         signedHashes[blueprintHash] = true;
     }
 
-    // TODO: need a sanity check on this 1271 implementation.
+    // AUDIT need a sanity check on this 1271 implementation.
     function isValidSignature(bytes32 blueprintHash, bytes memory) external view returns (bytes4 magicValue) {
         if (signedHashes[blueprintHash]) {
             return 0x1626ba7e;
